@@ -120,12 +120,12 @@ export function CreateTaskDialog({ open, onOpenChange, defaultDate }: CreateTask
 
             <div className="space-y-2">
               <Label>Área</Label>
-              <Select value={areaId} onValueChange={setAreaId}>
+              <Select value={areaId || "__none__"} onValueChange={(v) => setAreaId(v === "__none__" ? "" : v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecionar..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhuma</SelectItem>
+                  <SelectItem value="__none__">Nenhuma</SelectItem>
                   {areas.map((area) => (
                     <SelectItem key={area.id} value={area.id}>
                       <div className="flex items-center gap-2">
