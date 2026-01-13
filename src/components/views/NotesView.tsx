@@ -1,13 +1,13 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, FileText, Link2, MoreHorizontal, Trash2, Edit } from 'lucide-react';
+import { Plus, Search, FileText, Link2, MoreHorizontal, Trash2, Edit, Pin } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { AREA_COLORS } from '@/types';
+import { AREA_COLORS, Note } from '@/types';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,12 +15,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { CreateNoteDialog } from '@/components/dialogs/CreateNoteDialog';
+import { NoteDetailDialog } from '@/components/dialogs/NoteDetailDialog';
 
 export function NotesView() {
   const [isCreateNoteOpen, setIsCreateNoteOpen] = useState(false);
-  const { notes, areas, tasks, deleteNote } = useAppStore();
+  const { notes, areas, tasks, deleteNote, toggleNotePin } = useAppStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
 
   const filteredNotes = useMemo(() => {
     return notes.filter(note => {
@@ -32,8 +34,21 @@ export function NotesView() {
     });
   }, [notes, searchQuery, selectedArea]);
 
+  // Sort pinned notes first
+  const sortedNotes = useMemo(() => {
+    return [...filteredNotes].sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return b.updatedAt.getTime() - a.updatedAt.getTime();
+    });
+  }, [filteredNotes]);
+
   const getArea = (areaId?: string) => areas.find(a => a.id === areaId);
   const getTask = (taskId?: string) => tasks.find(t => t.id === taskId);
+
+  const handleNoteClick = (note: Note) => {
+    setSelectedNote(note);
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -102,9 +117,9 @@ export function NotesView() {
       {/* Notes Grid */}
       <div className="flex-1 p-4 md:p-6 overflow-auto">
         <AnimatePresence mode="popLayout">
-          {filteredNotes.length > 0 ? (
+          {sortedNotes.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredNotes.map((note, index) => {
+              {sortedNotes.map((note, index) => {
                 const area = getArea(note.areaId);
                 const linkedTask = getTask(note.taskId);
 
@@ -116,11 +131,18 @@ export function NotesView() {
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ delay: index * 0.03 }}
-                    className="task-card group cursor-pointer"
+                    className={cn(
+                      "task-card group cursor-pointer",
+                      note.isPinned && "ring-1 ring-primary/30"
+                    )}
+                    onClick={() => handleNoteClick(note)}
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <FileText className="h-4 w-4 text-muted-foreground" />
+                        {note.isPinned && (
+                          <Pin className="h-3 w-3 text-primary" />
+                        )}
                         {area && (
                           <span className={cn('area-badge border', AREA_COLORS[area.color])}>
                             {area.name}
@@ -133,17 +155,31 @@ export function NotesView() {
                             variant="ghost" 
                             size="icon" 
                             className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={(e) => e.stopPropagation()}
                           >
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            handleNoteClick(note);
+                          }}>
                             <Edit className="h-4 w-4 mr-2" />
                             Editar
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            toggleNotePin(note.id);
+                          }}>
+                            <Pin className="h-4 w-4 mr-2" />
+                            {note.isPinned ? 'Desafixar' : 'Afixar'}
+                          </DropdownMenuItem>
                           <DropdownMenuItem 
-                            onClick={() => deleteNote(note.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteNote(note.id);
+                            }}
                             className="text-destructive"
                           >
                             <Trash2 className="h-4 w-4 mr-2" />
@@ -183,7 +219,11 @@ export function NotesView() {
             >
               <FileText className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
               <p className="text-muted-foreground">Nenhuma nota encontrada</p>
-              <Button variant="outline" className="mt-4 gap-2">
+              <Button 
+                variant="outline" 
+                className="mt-4 gap-2"
+                onClick={() => setIsCreateNoteOpen(true)}
+              >
                 <Plus className="h-4 w-4" />
                 Criar primeira nota
               </Button>
@@ -191,6 +231,12 @@ export function NotesView() {
           )}
         </AnimatePresence>
       </div>
+
+      <NoteDetailDialog
+        note={selectedNote}
+        open={!!selectedNote}
+        onOpenChange={(open) => !open && setSelectedNote(null)}
+      />
     </div>
   );
 }

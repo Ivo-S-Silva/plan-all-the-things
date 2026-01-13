@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AreaDetailView } from '@/components/views/AreaDetailView';
 
 const COLOR_OPTIONS: { value: Area['color']; label: string; class: string }[] = [
   { value: 'work', label: 'Trabalho', class: 'bg-area-work' },
@@ -42,6 +43,7 @@ export function AreasView() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newAreaName, setNewAreaName] = useState('');
   const [newAreaColor, setNewAreaColor] = useState<Area['color']>('work');
+  const [selectedArea, setSelectedArea] = useState<Area | null>(null);
 
   const getAreaStats = (areaId: string) => {
     const areaTasks = tasks.filter(t => t.areaId === areaId);
@@ -66,6 +68,19 @@ export function AreasView() {
       setIsDialogOpen(false);
     }
   };
+
+  const handleAreaClick = (area: Area) => {
+    setSelectedArea(area);
+  };
+
+  if (selectedArea) {
+    return (
+      <AreaDetailView 
+        area={selectedArea} 
+        onBack={() => setSelectedArea(null)} 
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -144,13 +159,14 @@ export function AreasView() {
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ delay: index * 0.05 }}
                     className={cn(
-                      'task-card border-l-4',
+                      'task-card border-l-4 cursor-pointer',
                       area.color === 'work' && 'border-l-area-work',
                       area.color === 'personal' && 'border-l-area-personal',
                       area.color === 'health' && 'border-l-area-health',
                       area.color === 'learning' && 'border-l-area-learning',
                       area.color === 'finance' && 'border-l-area-finance',
                     )}
+                    onClick={() => handleAreaClick(area)}
                   >
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3">
@@ -171,17 +187,28 @@ export function AreasView() {
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            handleAreaClick(area);
+                          }}>
                             <Edit className="h-4 w-4 mr-2" />
                             Editar
                           </DropdownMenuItem>
                           <DropdownMenuItem 
-                            onClick={() => deleteArea(area.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteArea(area.id);
+                            }}
                             className="text-destructive"
                           >
                             <Trash2 className="h-4 w-4 mr-2" />

@@ -11,8 +11,20 @@ export type TaskState =
 export interface Area {
   id: string;
   name: string;
+  description?: string;
   color: 'work' | 'personal' | 'health' | 'learning' | 'finance';
   icon?: string;
+}
+
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  areaId?: string;
+  taskId?: string;
+  isPinned?: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface Subtask {
@@ -29,21 +41,14 @@ export interface Task {
   areaId?: string;
   dueDate?: Date;
   scheduledDate?: Date;
+  scheduledTime?: string; // HH:mm format
+  duration?: number; // in minutes
   subtasks: Subtask[];
   noteIds: string[];
   createdAt: Date;
   updatedAt: Date;
 }
 
-export interface Note {
-  id: string;
-  title: string;
-  content: string;
-  areaId?: string;
-  taskId?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
 
 export interface CalendarEvent {
   id: string;
