@@ -1,13 +1,32 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { AppLayout } from '@/components/layout/AppLayout';
+import { CalendarView } from '@/components/views/CalendarView';
+import { TasksView } from '@/components/views/TasksView';
+import { NotesView } from '@/components/views/NotesView';
+import { AreasView } from '@/components/views/AreasView';
+import { useAppStore } from '@/stores/appStore';
 
 const Index = () => {
+  const { activeView } = useAppStore();
+
+  const renderView = () => {
+    switch (activeView) {
+      case 'calendar':
+        return <CalendarView />;
+      case 'tasks':
+        return <TasksView />;
+      case 'notes':
+        return <NotesView />;
+      case 'areas':
+        return <AreasView />;
+      default:
+        return <CalendarView />;
+    }
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
+    <AppLayout>
+      {renderView()}
+    </AppLayout>
   );
 };
 
