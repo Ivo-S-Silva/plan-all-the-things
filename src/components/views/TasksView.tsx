@@ -8,7 +8,9 @@ import {
   CheckCircle2,
   Circle,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Clock,
+  Timer
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -16,7 +18,7 @@ import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { TASK_STATE_CONFIG, AREA_COLORS, TaskState } from '@/types';
+import { TASK_STATE_CONFIG, AREA_COLORS, TaskState, Task } from '@/types';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { CreateTaskDialog } from '@/components/dialogs/CreateTaskDialog';
+import { TaskDetailDialog } from '@/components/dialogs/TaskDetailDialog';
 
 const STATE_ORDER: TaskState[] = ['in-progress', 'ready', 'waiting', 'qa', 'developed', 'backlog', 'done', 'archived'];
 
@@ -33,6 +36,7 @@ export function TasksView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [expandedStates, setExpandedStates] = useState<TaskState[]>(['in-progress', 'ready', 'waiting', 'backlog']);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
@@ -70,6 +74,10 @@ export function TasksView() {
   };
 
   const getArea = (areaId?: string) => areas.find(a => a.id === areaId);
+
+  const handleTaskClick = (task: Task) => {
+    setSelectedTask(task);
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -179,11 +187,15 @@ export function TasksView() {
                             initial={{ opacity: 0, x: -10 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: index * 0.03 }}
-                            className="task-card group"
+                            className="task-card group cursor-pointer"
+                            onClick={() => handleTaskClick(task)}
                           >
                             <div className="flex items-start gap-3">
                               <button 
-                                onClick={() => updateTaskState(task.id, task.state === 'done' ? 'backlog' : 'done')}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateTaskState(task.id, task.state === 'done' ? 'backlog' : 'done');
+                                }}
                                 className="mt-0.5 flex-shrink-0"
                               >
                                 {task.state === 'done' ? (
@@ -215,6 +227,18 @@ export function TasksView() {
                                       {format(task.dueDate, "d MMM", { locale: pt })}
                                     </span>
                                   )}
+                                  {task.scheduledTime && (
+                                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                      <Clock className="h-3 w-3" />
+                                      {task.scheduledTime}
+                                    </span>
+                                  )}
+                                  {task.duration && (
+                                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                      <Timer className="h-3 w-3" />
+                                      {task.duration >= 60 ? `${Math.floor(task.duration / 60)}h` : `${task.duration}m`}
+                                    </span>
+                                  )}
                                   {task.subtasks.length > 0 && (
                                     <span className="text-xs text-muted-foreground">
                                       {completedSubtasks}/{task.subtasks.length}
@@ -228,6 +252,7 @@ export function TasksView() {
                                     variant="ghost" 
                                     size="icon" 
                                     className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={(e) => e.stopPropagation()}
                                   >
                                     <MoreHorizontal className="h-4 w-4" />
                                   </Button>
@@ -236,13 +261,19 @@ export function TasksView() {
                                   {STATE_ORDER.filter(s => s !== state).map(s => (
                                     <DropdownMenuItem 
                                       key={s}
-                                      onClick={() => updateTaskState(task.id, s)}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        updateTaskState(task.id, s);
+                                      }}
                                     >
                                       Mover para {TASK_STATE_CONFIG[s].label}
                                     </DropdownMenuItem>
                                   ))}
                                   <DropdownMenuItem 
-                                    onClick={() => deleteTask(task.id)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      deleteTask(task.id);
+                                    }}
                                     className="text-destructive"
                                   >
                                     Eliminar
@@ -269,6 +300,12 @@ export function TasksView() {
           );
         })}
       </div>
+
+      <TaskDetailDialog
+        task={selectedTask}
+        open={!!selectedTask}
+        onOpenChange={(open) => !open && setSelectedTask(null)}
+      />
     </div>
   );
 }

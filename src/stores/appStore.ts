@@ -23,6 +23,12 @@ interface AppState {
   addNote: (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateNote: (id: string, updates: Partial<Note>) => void;
   deleteNote: (id: string) => void;
+  toggleNotePin: (id: string) => void;
+  
+  // Subtask actions
+  toggleSubtask: (taskId: string, subtaskId: string) => void;
+  addSubtask: (taskId: string, title: string) => void;
+  deleteSubtask: (taskId: string, subtaskId: string) => void;
   
   // Area actions
   addArea: (area: Omit<Area, 'id'>) => void;
@@ -178,6 +184,54 @@ export const useAppStore = create<AppState>((set) => ({
   deleteNote: (id) =>
     set((state) => ({
       notes: state.notes.filter((note) => note.id !== id),
+    })),
+
+  toggleNotePin: (id) =>
+    set((state) => ({
+      notes: state.notes.map((note) =>
+        note.id === id ? { ...note, isPinned: !note.isPinned, updatedAt: new Date() } : note
+      ),
+    })),
+
+  toggleSubtask: (taskId, subtaskId) =>
+    set((state) => ({
+      tasks: state.tasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              subtasks: task.subtasks.map((s) =>
+                s.id === subtaskId ? { ...s, completed: !s.completed } : s
+              ),
+              updatedAt: new Date(),
+            }
+          : task
+      ),
+    })),
+
+  addSubtask: (taskId, title) =>
+    set((state) => ({
+      tasks: state.tasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              subtasks: [...task.subtasks, { id: generateId(), title, completed: false }],
+              updatedAt: new Date(),
+            }
+          : task
+      ),
+    })),
+
+  deleteSubtask: (taskId, subtaskId) =>
+    set((state) => ({
+      tasks: state.tasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              subtasks: task.subtasks.filter((s) => s.id !== subtaskId),
+              updatedAt: new Date(),
+            }
+          : task
+      ),
     })),
 
   addArea: (area) =>
