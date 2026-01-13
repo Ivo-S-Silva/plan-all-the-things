@@ -84,12 +84,12 @@ export function CreateNoteDialog({ open, onOpenChange }: CreateNoteDialogProps) 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Área</Label>
-              <Select value={areaId} onValueChange={setAreaId}>
+              <Select value={areaId || "__none__"} onValueChange={(v) => setAreaId(v === "__none__" ? "" : v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecionar..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhuma</SelectItem>
+                  <SelectItem value="__none__">Nenhuma</SelectItem>
                   {areas.map((area) => (
                     <SelectItem key={area.id} value={area.id}>
                       <div className="flex items-center gap-2">
@@ -111,12 +111,12 @@ export function CreateNoteDialog({ open, onOpenChange }: CreateNoteDialogProps) 
 
             <div className="space-y-2">
               <Label>Ligar a tarefa</Label>
-              <Select value={taskId} onValueChange={setTaskId}>
+              <Select value={taskId || "__none__"} onValueChange={(v) => setTaskId(v === "__none__" ? "" : v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Opcional..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhuma</SelectItem>
+                  <SelectItem value="__none__">Nenhuma</SelectItem>
                   {tasks.map((task) => (
                     <SelectItem key={task.id} value={task.id}>
                       <span className="truncate">{task.title}</span>
