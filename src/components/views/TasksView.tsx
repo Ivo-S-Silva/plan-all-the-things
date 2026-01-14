@@ -310,16 +310,23 @@ function SortableStateColumn({
   );
 }
 
-const DEFAULT_STATE_ORDER: TaskState[] = ['in-progress', 'ready', 'waiting', 'qa', 'developed', 'backlog', 'done', 'archived'];
-
 export function TasksView() {
-  const { tasks, areas, updateTaskState, deleteTask } = useAppStore();
+  const { 
+    tasks, 
+    areas, 
+    updateTaskState, 
+    deleteTask, 
+    stateOrder, 
+    setStateOrder,
+    taskOrder,
+    reorderTasksInState,
+    moveTaskToState,
+  } = useAppStore();
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [expandedStates, setExpandedStates] = useState<TaskState[]>(['in-progress', 'ready', 'waiting', 'backlog']);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [stateOrder, setStateOrder] = useState<TaskState[]>(DEFAULT_STATE_ORDER);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -341,8 +348,9 @@ export function TasksView() {
     });
   }, [tasks, searchQuery, selectedArea]);
 
+  // Get tasks by state, sorted by taskOrder
   const tasksByState = useMemo(() => {
-    const grouped: Record<TaskState, typeof tasks> = {
+    const grouped: Record<TaskState, Task[]> = {
       'backlog': [],
       'in-progress': [],
       'waiting': [],
@@ -353,12 +361,37 @@ export function TasksView() {
       'archived': [],
     };
     
-    filteredTasks.forEach(task => {
-      grouped[task.state].push(task);
+    // Create a map for quick lookup
+    const taskMap = new Map(filteredTasks.map(t => [t.id, t]));
+    
+    // For each state, order tasks by taskOrder, then add any not in order
+    Object.keys(grouped).forEach((state) => {
+      const stateKey = state as TaskState;
+      const orderIds = taskOrder[stateKey] || [];
+      const orderedTasks: Task[] = [];
+      const addedIds = new Set<string>();
+      
+      // Add tasks in order
+      orderIds.forEach(id => {
+        const task = taskMap.get(id);
+        if (task && task.state === stateKey) {
+          orderedTasks.push(task);
+          addedIds.add(id);
+        }
+      });
+      
+      // Add any tasks not in the order (newly created, etc.)
+      filteredTasks.forEach(task => {
+        if (task.state === stateKey && !addedIds.has(task.id)) {
+          orderedTasks.push(task);
+        }
+      });
+      
+      grouped[stateKey] = orderedTasks;
     });
     
     return grouped;
-  }, [filteredTasks]);
+  }, [filteredTasks, taskOrder]);
 
   const toggleState = (state: TaskState) => {
     setExpandedStates(prev => 
@@ -380,34 +413,7 @@ export function TasksView() {
   };
 
   const handleDragOver = (event: DragOverEvent) => {
-    const { active, over } = event;
-    if (!over) return;
-
-    const activeId = String(active.id);
-    const overId = String(over.id);
-
-    // Handle task movement between states
-    if (!activeId.startsWith('column-') && !overId.startsWith('column-')) {
-      const activeTask = tasks.find(t => t.id === activeId);
-      const overTask = tasks.find(t => t.id === overId);
-
-      if (activeTask && overTask && activeTask.state !== overTask.state) {
-        updateTaskState(activeId, overTask.state);
-      }
-    }
-
-    // Handle dropping on a state column (via drop zone)
-    if (!activeId.startsWith('column-')) {
-      // Check if over element is a drop zone by checking parent structure
-      const overElement = document.querySelector(`[data-state]`);
-      if (over.id && String(over.id).includes('column-')) {
-        const targetState = String(over.id).replace('column-', '') as TaskState;
-        const activeTask = tasks.find(t => t.id === activeId);
-        if (activeTask && activeTask.state !== targetState) {
-          updateTaskState(activeId, targetState);
-        }
-      }
-    }
+    // We'll handle all logic in dragEnd to avoid conflicts
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -429,12 +435,41 @@ export function TasksView() {
         const newIndex = stateOrder.indexOf(overState);
         setStateOrder(arrayMove(stateOrder, oldIndex, newIndex));
       }
+      return;
     }
 
-    // Handle dropping task on state column
-    if (!activeId.startsWith('column-') && overId.startsWith('column-')) {
-      const targetState = overId.replace('column-', '') as TaskState;
-      updateTaskState(activeId, targetState);
+    // Handle task reordering within same state or moving to different state
+    if (!activeId.startsWith('column-')) {
+      const activeTask = tasks.find(t => t.id === activeId);
+      if (!activeTask) return;
+
+      // Dropping on another task
+      if (!overId.startsWith('column-')) {
+        const overTask = tasks.find(t => t.id === overId);
+        if (!overTask) return;
+
+        if (activeTask.state === overTask.state) {
+          // Reorder within same state
+          const currentOrder = taskOrder[activeTask.state] || [];
+          const oldIndex = currentOrder.indexOf(activeId);
+          const newIndex = currentOrder.indexOf(overId);
+          
+          if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+            reorderTasksInState(activeTask.state, arrayMove(currentOrder, oldIndex, newIndex));
+          }
+        } else {
+          // Move to different state at specific position
+          const targetOrder = taskOrder[overTask.state] || [];
+          const newIndex = targetOrder.indexOf(overId);
+          moveTaskToState(activeId, activeTask.state, overTask.state, newIndex);
+        }
+      } else {
+        // Dropping on a state column
+        const targetState = overId.replace('column-', '') as TaskState;
+        if (activeTask.state !== targetState) {
+          moveTaskToState(activeId, activeTask.state, targetState);
+        }
+      }
     }
   };
 
