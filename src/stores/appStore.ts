@@ -1,5 +1,8 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { Task, Note, Area, TaskState, CalendarEvent } from '@/types';
+
+const DEFAULT_STATE_ORDER: TaskState[] = ['in-progress', 'ready', 'waiting', 'qa', 'developed', 'backlog', 'done', 'archived'];
 
 interface AppState {
   tasks: Task[];
@@ -8,6 +11,8 @@ interface AppState {
   events: CalendarEvent[];
   selectedDate: Date;
   activeView: 'calendar' | 'tasks' | 'notes' | 'areas';
+  stateOrder: TaskState[];
+  taskOrder: Record<TaskState, string[]>; // task IDs per state
   
   // Actions
   setSelectedDate: (date: Date) => void;
@@ -34,6 +39,11 @@ interface AppState {
   addArea: (area: Omit<Area, 'id'>) => void;
   updateArea: (id: string, updates: Partial<Area>) => void;
   deleteArea: (id: string) => void;
+  
+  // Order actions
+  setStateOrder: (order: TaskState[]) => void;
+  reorderTasksInState: (state: TaskState, taskIds: string[]) => void;
+  moveTaskToState: (taskId: string, fromState: TaskState, toState: TaskState, newIndex?: number) => void;
 }
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -118,136 +128,243 @@ const sampleNotes: Note[] = [
   },
 ];
 
-export const useAppStore = create<AppState>((set) => ({
-  tasks: sampleTasks,
-  notes: sampleNotes,
-  areas: sampleAreas,
-  events: [],
-  selectedDate: new Date(),
-  activeView: 'calendar',
+// Helper to build initial task order from sample tasks
+const buildInitialTaskOrder = (): Record<TaskState, string[]> => {
+  const order: Record<TaskState, string[]> = {
+    'backlog': [],
+    'in-progress': [],
+    'waiting': [],
+    'qa': [],
+    'developed': [],
+    'ready': [],
+    'done': [],
+    'archived': [],
+  };
+  sampleTasks.forEach(task => {
+    order[task.state].push(task.id);
+  });
+  return order;
+};
 
-  setSelectedDate: (date) => set({ selectedDate: date }),
-  setActiveView: (view) => set({ activeView: view }),
+export const useAppStore = create<AppState>()(
+  persist(
+    (set, get) => ({
+      tasks: sampleTasks,
+      notes: sampleNotes,
+      areas: sampleAreas,
+      events: [],
+      selectedDate: new Date(),
+      activeView: 'calendar',
+      stateOrder: DEFAULT_STATE_ORDER,
+      taskOrder: buildInitialTaskOrder(),
 
-  addTask: (task) =>
-    set((state) => ({
-      tasks: [
-        ...state.tasks,
-        {
-          ...task,
-          id: generateId(),
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ],
-    })),
+      setSelectedDate: (date) => set({ selectedDate: date }),
+      setActiveView: (view) => set({ activeView: view }),
 
-  updateTask: (id, updates) =>
-    set((state) => ({
-      tasks: state.tasks.map((task) =>
-        task.id === id ? { ...task, ...updates, updatedAt: new Date() } : task
-      ),
-    })),
+      addTask: (task) =>
+        set((state) => {
+          const newId = generateId();
+          const newTask = {
+            ...task,
+            id: newId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+          return {
+            tasks: [...state.tasks, newTask],
+            taskOrder: {
+              ...state.taskOrder,
+              [task.state]: [...(state.taskOrder[task.state] || []), newId],
+            },
+          };
+        }),
 
-  deleteTask: (id) =>
-    set((state) => ({
-      tasks: state.tasks.filter((task) => task.id !== id),
-    })),
+      updateTask: (id, updates) =>
+        set((state) => {
+          const oldTask = state.tasks.find(t => t.id === id);
+          const newTasks = state.tasks.map((task) =>
+            task.id === id ? { ...task, ...updates, updatedAt: new Date() } : task
+          );
+          
+          // Handle state change in taskOrder
+          if (updates.state && oldTask && oldTask.state !== updates.state) {
+            const oldState = oldTask.state;
+            const newState = updates.state;
+            return {
+              tasks: newTasks,
+              taskOrder: {
+                ...state.taskOrder,
+                [oldState]: (state.taskOrder[oldState] || []).filter(tid => tid !== id),
+                [newState]: [...(state.taskOrder[newState] || []), id],
+              },
+            };
+          }
+          return { tasks: newTasks };
+        }),
 
-  updateTaskState: (id, taskState) =>
-    set((state) => ({
-      tasks: state.tasks.map((task) =>
-        task.id === id ? { ...task, state: taskState, updatedAt: new Date() } : task
-      ),
-    })),
+      deleteTask: (id) =>
+        set((state) => {
+          const task = state.tasks.find(t => t.id === id);
+          const newTaskOrder = { ...state.taskOrder };
+          if (task) {
+            newTaskOrder[task.state] = (newTaskOrder[task.state] || []).filter(tid => tid !== id);
+          }
+          return {
+            tasks: state.tasks.filter((t) => t.id !== id),
+            taskOrder: newTaskOrder,
+          };
+        }),
 
-  addNote: (note) =>
-    set((state) => ({
-      notes: [
-        ...state.notes,
-        {
-          ...note,
-          id: generateId(),
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ],
-    })),
+      updateTaskState: (id, taskState) =>
+        set((state) => {
+          const task = state.tasks.find(t => t.id === id);
+          if (!task || task.state === taskState) return {};
+          
+          const oldState = task.state;
+          return {
+            tasks: state.tasks.map((t) =>
+              t.id === id ? { ...t, state: taskState, updatedAt: new Date() } : t
+            ),
+            taskOrder: {
+              ...state.taskOrder,
+              [oldState]: (state.taskOrder[oldState] || []).filter(tid => tid !== id),
+              [taskState]: [...(state.taskOrder[taskState] || []), id],
+            },
+          };
+        }),
 
-  updateNote: (id, updates) =>
-    set((state) => ({
-      notes: state.notes.map((note) =>
-        note.id === id ? { ...note, ...updates, updatedAt: new Date() } : note
-      ),
-    })),
-
-  deleteNote: (id) =>
-    set((state) => ({
-      notes: state.notes.filter((note) => note.id !== id),
-    })),
-
-  toggleNotePin: (id) =>
-    set((state) => ({
-      notes: state.notes.map((note) =>
-        note.id === id ? { ...note, isPinned: !note.isPinned, updatedAt: new Date() } : note
-      ),
-    })),
-
-  toggleSubtask: (taskId, subtaskId) =>
-    set((state) => ({
-      tasks: state.tasks.map((task) =>
-        task.id === taskId
-          ? {
-              ...task,
-              subtasks: task.subtasks.map((s) =>
-                s.id === subtaskId ? { ...s, completed: !s.completed } : s
-              ),
+      addNote: (note) =>
+        set((state) => ({
+          notes: [
+            ...state.notes,
+            {
+              ...note,
+              id: generateId(),
+              createdAt: new Date(),
               updatedAt: new Date(),
-            }
-          : task
-      ),
-    })),
+            },
+          ],
+        })),
 
-  addSubtask: (taskId, title) =>
-    set((state) => ({
-      tasks: state.tasks.map((task) =>
-        task.id === taskId
-          ? {
-              ...task,
-              subtasks: [...task.subtasks, { id: generateId(), title, completed: false }],
-              updatedAt: new Date(),
-            }
-          : task
-      ),
-    })),
+      updateNote: (id, updates) =>
+        set((state) => ({
+          notes: state.notes.map((note) =>
+            note.id === id ? { ...note, ...updates, updatedAt: new Date() } : note
+          ),
+        })),
 
-  deleteSubtask: (taskId, subtaskId) =>
-    set((state) => ({
-      tasks: state.tasks.map((task) =>
-        task.id === taskId
-          ? {
-              ...task,
-              subtasks: task.subtasks.filter((s) => s.id !== subtaskId),
-              updatedAt: new Date(),
-            }
-          : task
-      ),
-    })),
+      deleteNote: (id) =>
+        set((state) => ({
+          notes: state.notes.filter((note) => note.id !== id),
+        })),
 
-  addArea: (area) =>
-    set((state) => ({
-      areas: [...state.areas, { ...area, id: generateId() }],
-    })),
+      toggleNotePin: (id) =>
+        set((state) => ({
+          notes: state.notes.map((note) =>
+            note.id === id ? { ...note, isPinned: !note.isPinned, updatedAt: new Date() } : note
+          ),
+        })),
 
-  updateArea: (id, updates) =>
-    set((state) => ({
-      areas: state.areas.map((area) =>
-        area.id === id ? { ...area, ...updates } : area
-      ),
-    })),
+      toggleSubtask: (taskId, subtaskId) =>
+        set((state) => ({
+          tasks: state.tasks.map((task) =>
+            task.id === taskId
+              ? {
+                  ...task,
+                  subtasks: task.subtasks.map((s) =>
+                    s.id === subtaskId ? { ...s, completed: !s.completed } : s
+                  ),
+                  updatedAt: new Date(),
+                }
+              : task
+          ),
+        })),
 
-  deleteArea: (id) =>
-    set((state) => ({
-      areas: state.areas.filter((area) => area.id !== id),
-    })),
-}));
+      addSubtask: (taskId, title) =>
+        set((state) => ({
+          tasks: state.tasks.map((task) =>
+            task.id === taskId
+              ? {
+                  ...task,
+                  subtasks: [...task.subtasks, { id: generateId(), title, completed: false }],
+                  updatedAt: new Date(),
+                }
+              : task
+          ),
+        })),
+
+      deleteSubtask: (taskId, subtaskId) =>
+        set((state) => ({
+          tasks: state.tasks.map((task) =>
+            task.id === taskId
+              ? {
+                  ...task,
+                  subtasks: task.subtasks.filter((s) => s.id !== subtaskId),
+                  updatedAt: new Date(),
+                }
+              : task
+          ),
+        })),
+
+      addArea: (area) =>
+        set((state) => ({
+          areas: [...state.areas, { ...area, id: generateId() }],
+        })),
+
+      updateArea: (id, updates) =>
+        set((state) => ({
+          areas: state.areas.map((area) =>
+            area.id === id ? { ...area, ...updates } : area
+          ),
+        })),
+
+      deleteArea: (id) =>
+        set((state) => ({
+          areas: state.areas.filter((area) => area.id !== id),
+        })),
+
+      setStateOrder: (order) => set({ stateOrder: order }),
+
+      reorderTasksInState: (state, taskIds) =>
+        set((s) => ({
+          taskOrder: {
+            ...s.taskOrder,
+            [state]: taskIds,
+          },
+        })),
+
+      moveTaskToState: (taskId, fromState, toState, newIndex) =>
+        set((s) => {
+          const fromList = (s.taskOrder[fromState] || []).filter(id => id !== taskId);
+          const toList = [...(s.taskOrder[toState] || [])];
+          
+          if (newIndex !== undefined) {
+            toList.splice(newIndex, 0, taskId);
+          } else {
+            toList.push(taskId);
+          }
+          
+          return {
+            tasks: s.tasks.map((t) =>
+              t.id === taskId ? { ...t, state: toState, updatedAt: new Date() } : t
+            ),
+            taskOrder: {
+              ...s.taskOrder,
+              [fromState]: fromList,
+              [toState]: toList,
+            },
+          };
+        }),
+    }),
+    {
+      name: 'app-storage',
+      partialize: (state) => ({
+        tasks: state.tasks,
+        notes: state.notes,
+        areas: state.areas,
+        stateOrder: state.stateOrder,
+        taskOrder: state.taskOrder,
+      }),
+    }
+  )
+);
