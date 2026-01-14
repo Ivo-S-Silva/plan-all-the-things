@@ -58,10 +58,13 @@ const DURATION_OPTIONS = [
   { value: 240, label: '4 horas' },
 ];
 
-export function TaskDetailDialog({ task, open, onOpenChange }: TaskDetailDialogProps) {
-  const { updateTask, areas, toggleSubtask, addSubtask, deleteSubtask, deleteTask } = useAppStore();
+export function TaskDetailDialog({ task: taskProp, open, onOpenChange }: TaskDetailDialogProps) {
+  const { tasks, updateTask, areas, toggleSubtask, addSubtask, deleteSubtask, deleteTask } = useAppStore();
   const [newSubtask, setNewSubtask] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  
+  // Get live task data from store to ensure subtasks updates are reflected
+  const task = taskProp ? tasks.find(t => t.id === taskProp.id) || taskProp : null;
   
   // Editable fields
   const [title, setTitle] = useState('');
