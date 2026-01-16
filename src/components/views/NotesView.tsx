@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, FileText, Link2, MoreHorizontal, Trash2, Edit, Pin } from 'lucide-react';
+import { Plus, Search, FileText, Link2, MoreHorizontal, Trash2, Edit, Pin, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { useAppStore } from '@/stores/appStore';
@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { CreateNoteDialog } from '@/components/dialogs/CreateNoteDialog';
 import { NoteDetailDialog } from '@/components/dialogs/NoteDetailDialog';
+import { toast } from 'sonner';
 
 export function NotesView() {
   const [isCreateNoteOpen, setIsCreateNoteOpen] = useState(false);
@@ -50,6 +51,90 @@ export function NotesView() {
     setSelectedNote(note);
   };
 
+  const exportNotesToMarkdown = () => {
+    if (notes.length === 0) {
+      toast.error('Não há notas para exportar');
+      return;
+    }
+
+    let markdown = `# Notas Exportadas\n\n`;
+    markdown += `*Exportado em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: pt })}*\n\n`;
+    markdown += `---\n\n`;
+
+    // Group notes by area
+    const notesByArea: Record<string, Note[]> = {};
+    const notesWithoutArea: Note[] = [];
+
+    notes.forEach(note => {
+      if (note.areaId) {
+        if (!notesByArea[note.areaId]) {
+          notesByArea[note.areaId] = [];
+        }
+        notesByArea[note.areaId].push(note);
+      } else {
+        notesWithoutArea.push(note);
+      }
+    });
+
+    // Export notes grouped by area
+    areas.forEach(area => {
+      const areaNotes = notesByArea[area.id] || [];
+      if (areaNotes.length > 0) {
+        markdown += `## ${area.name}\n\n`;
+        areaNotes.forEach(note => {
+          markdown += `### ${note.title}\n\n`;
+          markdown += `${note.content}\n\n`;
+          if (note.taskId) {
+            const linkedTask = getTask(note.taskId);
+            if (linkedTask) {
+              markdown += `*Ligado à tarefa: ${linkedTask.title}*\n\n`;
+            }
+          }
+          markdown += `*Criado: ${format(note.createdAt, "dd/MM/yyyy", { locale: pt })} | `;
+          markdown += `Atualizado: ${format(note.updatedAt, "dd/MM/yyyy", { locale: pt })}*\n\n`;
+          if (note.isPinned) {
+            markdown += `📌 *Nota fixada*\n\n`;
+          }
+          markdown += `---\n\n`;
+        });
+      }
+    });
+
+    // Export notes without area
+    if (notesWithoutArea.length > 0) {
+      markdown += `## Sem Área\n\n`;
+      notesWithoutArea.forEach(note => {
+        markdown += `### ${note.title}\n\n`;
+        markdown += `${note.content}\n\n`;
+        if (note.taskId) {
+          const linkedTask = getTask(note.taskId);
+          if (linkedTask) {
+            markdown += `*Ligado à tarefa: ${linkedTask.title}*\n\n`;
+          }
+        }
+        markdown += `*Criado: ${format(note.createdAt, "dd/MM/yyyy", { locale: pt })} | `;
+        markdown += `Atualizado: ${format(note.updatedAt, "dd/MM/yyyy", { locale: pt })}*\n\n`;
+        if (note.isPinned) {
+          markdown += `📌 *Nota fixada*\n\n`;
+        }
+        markdown += `---\n\n`;
+      });
+    }
+
+    // Create download
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `notas-${format(new Date(), 'yyyy-MM-dd-HHmm')}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast.success(`${notes.length} notas exportadas com sucesso`);
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -61,10 +146,21 @@ export function NotesView() {
               {notes.length} notas
             </p>
           </div>
-          <Button className="gap-2" onClick={() => setIsCreateNoteOpen(true)}>
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Nova Nota</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={exportNotesToMarkdown}
+              disabled={notes.length === 0}
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Exportar</span>
+            </Button>
+            <Button className="gap-2" onClick={() => setIsCreateNoteOpen(true)}>
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Nova Nota</span>
+            </Button>
+          </div>
         </div>
 
         <CreateNoteDialog open={isCreateNoteOpen} onOpenChange={setIsCreateNoteOpen} />
