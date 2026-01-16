@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, 
@@ -90,11 +90,15 @@ export function TaskDetailDialog({ task: taskProp, open, onOpenChange }: TaskDet
     }
   };
 
-  const handleOpenChange = (newOpen: boolean) => {
-    if (newOpen && task) {
+  // Initialize form when dialog opens or task changes
+  useEffect(() => {
+    if (open && task) {
       initializeForm();
       setIsEditing(false);
     }
+  }, [open, task?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleOpenChange = (newOpen: boolean) => {
     onOpenChange(newOpen);
   };
 
